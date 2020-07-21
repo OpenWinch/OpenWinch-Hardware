@@ -1,0 +1,13 @@
+
+
+# FreeCAD
+##########
+
+*.FCStd1
+
+# Generated 3D printed file
+############################
+*.stl
+*.gcode
+
+
