@@ -29,6 +29,12 @@ OUT_PWR = 25
 # Throttle
 OUT_THROTTLE = 18
 
+# Tachometer
+IN_HS_W = 23
+IN_HS_V = 24
+IN_HS_U = 4
+
+# LCD
 LCD_WIDTH = 128
 LCD_HEIGHT = 64
 LCD_ADDR = 0x3c

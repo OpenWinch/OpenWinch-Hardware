@@ -4,7 +4,7 @@ import curses
 from gpiozero import Button, LED, PWMOutputDevice
 
 from hardware_config import OUT_REVERSE, OUT_SPD, OUT_THROTTLE
-from constantes import MOTOR_PPR, WINCH_DIAM
+from tachometer import Tachometer
 
 KEY_R = 114
 KEY_1 = 49
@@ -28,58 +28,22 @@ class Tester(object):
     reverse = False
 
     # Sensor
-    hsw = Button(23)
-    hsv = Button(24)
-    hsu = Button(4)
+    tacho = Tachometer()
 
     hallog = """ """
-    hsw_count = 0
-    hsv_count = 0
-    hsu_count = 0
 
     rpm = 0
     kpm = 0
     rot = False
-
-    rpm_start = 0
-    rpm_end = 0
 
     def stop(self):
         self.pwm.off()
         self.pwm.value = 0
 
     def __init__(self):
+        self.stop()
         atexit.register(self.stop)
         curses.wrapper(self.draw_main)
-
-        self.hsw.when_pressed = self.hallW
-        self.hsv.when_pressed = self.hallV
-        self.hsu.when_pressed = self.hallU
-
-        self.stop()
-
-    iw = 0
-    rr = 1
-    def hallW(self):
-        self.iw = self.iw + self.rr
-        self.hsw_count = self.hsw_count + 1
-        self.get_rpm()
-        self.get_kpm()
-        print("W Up! " + str(self.iw))
-
-    iv = 0
-    def hallV(self):
-        if (self.iv < self.iw):
-            self.rr = 1
-        else:
-            self.rr = -1
-        self.iv = self.iv + self.rr
-        print("V up! " + str(self.iv))
-
-    iu = 0
-    def hallU(self):
-        self.iu = self.iu + self.rr
-        print("U up! " + str(self.iu))
 
     def get_kpm(self):
         self.kpm = WINCH_DIAM * self.rpm * 0.1885
