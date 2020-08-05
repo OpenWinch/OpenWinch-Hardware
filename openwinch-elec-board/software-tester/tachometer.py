@@ -1,8 +1,10 @@
-#!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
 
 # OpneWinchPy : a library for controlling the Raspberry Pi's Winch
 # Copyright (c) 2020 Mickael Gaillard <mick.gaillard@gmail.com>
+
+import time
+import math
 
 from gpiozero import Button
 
@@ -12,109 +14,109 @@ from constantes import MOTOR_PPR, WINCH_DIAM
 CW = 1      # Assign a value to represent clock wise rotation
 CCW = -1    # Assign a value to represent counter-clock wise rotation
 
-PPR = 90
-
-
 millis = lambda: int(round(time.time() * 1000))
 
 
 class Tachometer(object):
 
-    direct = CW
-    RPM = 0
-    KPM = 0
+    __direct = CW
 
     # Sensor
-    hsw = Button(IN_HS_W)
-    hsv = Button(IN_HS_V)
-    hsu = Button(IN_HS_U)
+    _hsu = Button(IN_HS_U)
+    _hsw = Button(IN_HS_W)
+    _hsv = Button(IN_HS_V)
 
+    pulseTimeU = 0
     pulseTimeW = 0
     pulseTimeV = 0
-    pulseTimeU = 0
 
+    pulseCountU = 0
     pulseCountW = 0
     pulseCountV = 0
-    pulseCountU = 0
 
-    startTimeW = millis()
-    startTimeV = millis()
-    startTimeU = millis()
+    __startTimeU = millis()
+    __startTimeW = millis()
+    __startTimeV = millis()
 
-    prevTimeW = 0
-    prevTimeV = 0
-    prevTimeU = 0
+    __prevTimeU = 0
+    __prevTimeW = 0
+    __prevTimeV = 0
 
+    rpmU = 0
     rpmW = 0
     rpmV = 0
-    rpmU = 0
-
-    kpmW = 0
-    kpmV = 0
-    kpmU = 0
 
     def __init__(self):
-        self.hsw.when_pressed = self.hallSensorW
-        self.hsv.when_pressed = self.hallSensorV
-        self.hsu.when_pressed = self.hallSensorU
+        self._hsu.when_pressed = self.hallSensorU
+        self._hsw.when_pressed = self.hallSensorW
+        self._hsv.when_pressed = self.hallSensorV
 
+    def __get_rpm(self, pulseTime):
+        # Calculate the pulses per min (1000 millis in 1 second)
+        # (1000 / pulseTime) * 60
+        PPM = (60000 / pulseTime)
+        # Calculate revs per minute based on number of pulses per rev
+        RPM = PPM / (MOTOR_PPR / 3)
 
-    # def __HallSensor(self):
-    #     global pulseCount, RPM
-
-    #     pulseCount = pulseCount + (1 * direct)                      # Add 1 to the pulse count
-    #     AvPulseTime = ((pulseTimeW + pulseTimeU + pulseTimeV) / 3)  # Calculate the average time between pulses
-    #     PPM = (1000 / AvPulseTime) * 60                             # Calculate the pulses per min (1000 millis in 1 second)
-    #     RPM = PPM / PPR                                             # Calculate revs per minute based on number of pulses per rev
-
-    # def get_rpm(self):
-
-    #     delta = delta / 60
-    #     self.rpm = (self.hsw_count / delta) / MOTOR_PPR
+        return RPM
 
     def hallSensorW(self):
+        print("Pulse W")
         # Set startTime to current microcontroller elapsed time value
-        self.startTimeW = millis()
+        self.__startTimeW = millis()
 
         # Read the current W hall sensor value
-        __HSW_Val = self.hsw.is_pressed()
+        ___HSW_Val = self._hsw.is_pressed
         # Read the current V (or U) hall sensor value
-        __HSV_Val = self.hsv.is_pressed()
-        # Determine rotation direction (ternary if statement)
-        self.direct = CW if __HSW_Val == __HSV_Val else CCW
+        ___HSV_Val = self._hsv.is_pressed
+        # Determine rotation __direction (ternary if statement)
+        self.__direct = CW if ___HSW_Val == ___HSV_Val else CCW
 
         # Calculate the current time between pulses W
-        self.pulseTimeW = self.startTimeW - self.prevTimeW
+        self.pulseTimeW = self.__startTimeW - self.__prevTimeW
         # Remember the start time for the next interrupt
-        self.prevTimeW = self.startTimeW
+        self.__prevTimeW = self.__startTimeW
 
-        self.pulseCountW = self.pulseCountW + (1 * self.direct)
+        # Calculate Rotation Per Minute
+        self.rpmW = self.__get_rpm(self.pulseTimeW)
+        self.pulseCountW = self.pulseCountW + (1 * self.__direct)
 
     def hallSensorV(self):
-        self.startTimeV = millis()
+        print("Pulse V")
+        self.__startTimeV = millis()
 
-        __HSV_Val = self.hsv.is_pressed()
-        __HSU_Val = self.hsu.is_pressed()
-        self.direct = CW if __HSV_Val == __HSU_Val else CCW
+        ___HSV_Val = self._hsv.is_pressed
+        ___HSU_Val = self._hsu.is_pressed
+        self.__direct = CW if ___HSV_Val == ___HSU_Val else CCW
 
-        self.pulseTimeV = self.startTimeV - self.prevTimeV
-        self.__HallSensor()
-        self.prevTimeV = self.startTimeV
+        self.pulseTimeV = self.__startTimeV - self.__prevTimeV
+        self.__prevTimeV = self.__startTimeV
 
-        self.pulseCountV = self.pulseCountV + (1 * self.direct)
+        self.rpmV = self.__get_rpm(self.pulseTimeV)
+        self.pulseCountV = self.pulseCountV + (1 * self.__direct)
 
     def hallSensorU(self):
-        self.startTimeU = millis()
+        print("Pulse U")
+        self.__startTimeU = millis()
 
-        __HSU_Val = self.hsu.is_pressed()
-        __HSW_Val = self.hsw.is_pressed()
-        self.direct = CW if __HSU_Val == __HSW_Val else CCW
+        ___HSU_Val = self._hsu.is_pressed
+        ___HSW_Val = self._hsw.is_pressed
+        self.__direct = CW if ___HSU_Val == ___HSW_Val else CCW
 
-        self.pulseTimeU = self.startTimeU - self.prevTimeU
-        self.__HallSensor()
-        self.prevTimeU = self.startTimeU
+        self.pulseTimeU = self.__startTimeU - self.__prevTimeU
+        self.__prevTimeU = self.__startTimeU
 
-        self.pulseCountU = self.pulseCountU + (1 * self.direct)
+        self.rpmU = self.__get_rpm(self.pulseTimeU)
+        self.pulseCountU = self.pulseCountU + (1 * self.__direct)
 
-    def get_Direction(self):
-        return self.direct
+    def get_rotation(self):
+        return self.__direct
+
+    def get_rpm(self):
+        return (self.rpmU + self.rpmW + self.rpmV) / 3
+
+    def get_kph(self):
+        return WINCH_DIAM * self.get_rpm * 0.1885
+
+    def get_distance(self):
+        return (math.pi * WINCH_DIAM) * self.pulseCountU
