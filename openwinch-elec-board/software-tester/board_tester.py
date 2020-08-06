@@ -26,6 +26,7 @@ LCD_ENABLE = True
 
 class Tester(object):
 
+    # UI
     stdscr = None
     scrref = True
     width = 0
@@ -51,6 +52,7 @@ class Tester(object):
     pi_revr = None
     pi_spdr = None
     pi_pwm = None
+    lcd_device = None
 
     def stop(self):
         if (self.pi_pwm is not None):
@@ -103,22 +105,21 @@ class Tester(object):
         from luma.oled.device import sh1106
 
         serial_interface = i2c(port=1, address=LCD_ADDR)
-        device = sh1106(serial_interface,
+        self.lcd_device = sh1106(serial_interface,
                         width=LCD_WIDTH,
                         height=LCD_HEIGHT,
                         rotate=0)
-        device.show()
+        self.lcd_device.show()
 
-        with canvas(device) as draw:
+        with canvas(self.lcd_device) as draw:
             font_size = 20
-            name = "OpenWinch"
+            name = "OpenWinch tester !"
 
-            x = (LCD_WIDTH / 2) - (len(name) / 2 * font_size / 2)
-            xver = (LCD_WIDTH / 2) + (((len(name) / 2) - 1) * font_size / 2)
-            y = (LCD_HEIGHT / 2) - (font_size / 2)
-            yver = y + font_size
+            x = 0
+            y = 0
 
-            draw.text((x, y), name)
+            draw.rectangle(self.lcd_device.bounding_box, outline="white", fill="black")
+            draw.text((10, 25), name, fill="white")
 
     def btn_left_press(self):
         self.state_left = True
