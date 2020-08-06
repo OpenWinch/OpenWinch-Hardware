@@ -3,7 +3,7 @@ import atexit
 import curses
 from gpiozero import Button, LED, PWMOutputDevice
 
-from hardware_config import OUT_REVERSE, OUT_SPD, OUT_THROTTLE
+from hardware_config import OUT_REVERSE, OUT_SPD, OUT_THROTTLE, IN_KEY_ENTER, IN_KEY_LEFT, IN_KEY_RIGHT, LCD_ADDR, LCD_WIDTH, LCD_HEIGHT
 from tachometer import Tachometer
 
 KEY_R = 114
@@ -14,6 +14,7 @@ KEY_2 = 50
 class Tester(object):
 
     stdscr = None
+    scrref = True
     width = 0
     height = 0
 
@@ -29,6 +30,13 @@ class Tester(object):
 
     # Sensor
     tacho = Tachometer()
+    btn_left = Button(IN_KEY_LEFT)
+    btn_right = Button(IN_KEY_RIGHT)
+    btn_enter = Button(IN_KEY_ENTER)
+
+    state_left = False
+    state_right = False
+    state_enter = False
 
     hallog = """ """
 
@@ -39,11 +47,66 @@ class Tester(object):
     def stop(self):
         self.pwm.off()
         self.pwm.value = 0
+        self.rpm = 0
 
     def __init__(self):
         self.stop()
         atexit.register(self.stop)
+
+        self.draw_lcd()
+
+        self.btn_left.when_pressed = self.btn_left_press
+        self.btn_left.when_released = self.btn_left_unpress
+        self.btn_right.when_pressed = self.btn_right_press
+        self.btn_right.when_released = self.btn_right_unpress
+        self.btn_enter.when_pressed = self.btn_enter_press
+        self.btn_enter.when_released = self.btn_enter_unpress
+
         curses.wrapper(self.draw_main)
+
+    def draw_lcd(self):
+        from luma.core.interface.serial import i2c
+        from luma.core.render import canvas
+        from luma.oled.device import sh1106
+
+        serial_interface = i2c(port=1, address=LCD_ADDR)
+        device = sh1106(serial_interface, width=LCD_WIDTH, height=LCD_HEIGHT, rotate=0)
+
+        with canvas(device) as draw:
+            font_size = 20
+            name = "OpenWinch"
+
+            x = (LCD_WIDTH / 2) - (len(name) / 2 * font_size / 2)
+            xver = (LCD_WIDTH / 2) + (((len(name) / 2) - 1) * font_size / 2)
+            y = (LCD_HEIGHT / 2) - (font_size / 2)
+            yver = y + font_size
+
+            draw.text((x, y), name)
+        device.show()
+
+    def btn_left_press(self):
+        self.state_left = True
+        self.scrref = True
+
+    def btn_left_unpress(self):
+        self.state_left = False
+        self.scrref = True
+
+    def btn_right_press(self):
+        self.state_right = True
+        self.scrref = True
+
+    def btn_right_unpress(self):
+        self.state_right = False
+        self.scrref = True
+
+    def btn_enter_press(self):
+        self.state_enter = True
+        self.scrref = True
+
+    def btn_enter_unpress(self):
+        self.state_enter = False
+        self.scrref = True
 
     def get_kpm(self):
         self.kpm = WINCH_DIAM * self.rpm * 0.1885
@@ -93,6 +156,19 @@ class Tester(object):
         self.stdscr.addstr(self.height-1, len(statusbarstr),
                            " " * (self.width - len(statusbarstr) - 1))
         # self.stdscr.attroff(curses.color_pair(3))
+
+    def draw_button(self):
+        pos_x = 42
+        pos_y = 10
+
+        # Title
+        self.format_title(self.stdscr, pos_x, pos_y, "Buttons")
+
+        # Value
+        pos_xv = pos_x + 1
+        self.stdscr.addstr(pos_y + 1, pos_xv, "Left : {}".format(self.state_left))
+        self.stdscr.addstr(pos_y + 2, pos_xv, "Enter : {}".format(self.state_enter))
+        self.stdscr.addstr(pos_y + 3, pos_xv, "Right : {}".format(self.state_right))
 
     def draw_info(self):
         pos_x = 19
@@ -184,8 +260,8 @@ class Tester(object):
             "Throttle {}".format(round(self.throttle, 2)))
 
         # Value
-        self.stdscr.addstr(pos_y + 9, pos_xv, "↑ : Up")
-        self.stdscr.addstr(pos_y + 10, pos_xv, "↓ : Down")
+        self.stdscr.addstr(pos_y + 10, pos_xv, "↑ : Up")
+        self.stdscr.addstr(pos_y + 11, pos_xv, "↓ : Down")
 
         # Windows
         win = self.stdscr.subwin(12, 3, pos_y + 1, pos_x)
@@ -202,6 +278,9 @@ class Tester(object):
 
         self.stdscr = stdscr
 
+        curses.noecho()
+        stdscr.nodelay(1)
+
         # Clear and refresh the screen for a blank canvas
         self.stdscr.clear()
         self.stdscr.refresh()
@@ -215,20 +294,17 @@ class Tester(object):
         # Loop where k is the last character pressed
         while (k != ord('q')):
 
-            # Initialization
-            self.stdscr.clear()
-            self.height, self.width = self.stdscr.getmaxyx()
-            self.stdscr.border()
-
             tt = False
             if k == curses.KEY_DOWN:
                 if (self.throttle > 0):
                     self.throttle = self.throttle - self.throttle_inc
                     tt = True
+                    self.scrref = True
             elif k == curses.KEY_UP:
                 if (self.throttle < 10):
                     self.throttle = self.throttle + self.throttle_inc
                     tt = True
+                    self.scrref = True
 
             # elif k == curses.KEY_RIGHT:
             #     cursor_x = cursor_x + 1
@@ -239,40 +315,57 @@ class Tester(object):
                 self.reverse = not self.reverse
                 if (self.reverse):
                     self.revr.on()
+                    self.scrref = True
                 else:
                     self.revr.off()
+                    self.scrref = True
 
             elif k == KEY_1:
                 self.speed = 1
                 self.spdr.off()
+                self.scrref = True
             elif k == KEY_2:
                 self.speed = 2
                 self.spdr.on()
+                self.scrref = True
 
             if (tt):
                 if (self.throttle < 1):
                     self.pwm.off()
                     self.pwm.value = 0
+                    self.scrref = True
                 else:
                     j = self.throttle * 0.1
                     self.pwm.on()
                     self.pwm.value = j
+                    self.scrref = True
 
-            self.draw_title()
+            # Initialization
+            if (self.scrref):
 
-            self.draw_throttle()
-            self.draw_speed()
-            self.draw_reverse()
-            self.draw_hall()
-            self.draw_info()
+                self.stdscr.clear()
+                self.height, self.width = self.stdscr.getmaxyx()
+                self.stdscr.border()
 
-            self.draw_statusbar()
+                self.draw_title()
 
-            # Refresh the screen
-            self.stdscr.refresh()
+                self.draw_throttle()
+                self.draw_speed()
+                self.draw_reverse()
+                self.draw_hall()
+                self.draw_info()
+                self.draw_button()
+
+                self.draw_statusbar()
+
+                # Refresh the screen
+                self.stdscr.refresh()
+            self.scrref = False
 
             # Wait for next input
             k = self.stdscr.getch()
+
+            time.sleep(0.2)
 
 
 if __name__ == "__main__":
