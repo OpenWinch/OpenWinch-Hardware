@@ -1,3 +1,8 @@
+#!/usr/bin/env python3
+# -*- coding: UTF-8 -*-
+
+# OpneWinchPy : a library for controlling the Raspberry Pi's Winch
+# Copyright (c) 2020 Mickael Gaillard <mick.gaillard@gmail.com>
 
 import time
 import atexit
@@ -28,7 +33,7 @@ class Tester(object):
 
     # UI
     stdscr = None
-    scrref = True
+    scrref = 1
     width = 0
     height = 0
 
@@ -112,38 +117,34 @@ class Tester(object):
         self.lcd_device.show()
 
         with canvas(self.lcd_device) as draw:
-            font_size = 20
             name = "OpenWinch tester !"
-
-            x = 0
-            y = 0
 
             draw.rectangle(self.lcd_device.bounding_box, outline="white", fill="black")
             draw.text((10, 25), name, fill="white")
 
     def btn_left_press(self):
         self.state_left = True
-        self.scrref = True
+        self.scrref = self.scrref + 1
 
     def btn_left_unpress(self):
         self.state_left = False
-        self.scrref = True
+        self.scrref = self.scrref + 1
 
     def btn_right_press(self):
         self.state_right = True
-        self.scrref = True
+        self.scrref = self.scrref + 1
 
     def btn_right_unpress(self):
         self.state_right = False
-        self.scrref = True
+        self.scrref = self.scrref + 1
 
     def btn_enter_press(self):
         self.state_enter = True
-        self.scrref = True
+        self.scrref = self.scrref + 1
 
     def btn_enter_unpress(self):
         self.state_enter = False
-        self.scrref = True
+        self.scrref = self.scrref + 1
 
     def format_title(self, win, pos_x, pos_y, title):
         # win.attron(curses.color_pair(1))
@@ -239,7 +240,7 @@ class Tester(object):
             self.stdscr,
             pos_x,
             pos_y,
-            "Hall WVU : {} {} {}".format(1, 2, 3))
+            "Hall UWV")
 
         # Windows
         win = self.stdscr.subwin(
@@ -347,12 +348,12 @@ class Tester(object):
                 if (self.throttle > 0):
                     self.throttle = self.throttle - INC
                     update_throttle = True
-                    self.scrref = True
+                    self.scrref = self.scrref + 1
             elif k == curses.KEY_UP:
                 if (self.throttle < 10):
                     self.throttle = self.throttle + INC
                     update_throttle = True
-                    self.scrref = True
+                    self.scrref = self.scrref + 1
 
             # Reverse
             elif k == KEY_R:
@@ -360,23 +361,23 @@ class Tester(object):
                 if (self.reverse):
                     if (self.pi_revr is not None):
                         self.pi_revr.on()
-                    self.scrref = True
+                    self.scrref = self.scrref + 1
                 else:
                     if (self.pi_revr is not None):
                         self.pi_revr.off()
-                    self.scrref = True
+                    self.scrref = self.scrref + 1
 
             # Speed
             elif k == KEY_1:
                 self.speed = 1
                 if (self.pi_spdr is not None):
                     self.pi_spdr.off()
-                self.scrref = True
+                self.scrref = self.scrref + 1
             elif k == KEY_2:
                 self.speed = 2
                 if (self.pi_spdr is not None):
                     self.pi_spdr.on()
-                self.scrref = True
+                self.scrref = self.scrref + 1
 
             # Apply Throttle
             if (update_throttle):
@@ -384,16 +385,16 @@ class Tester(object):
                     if (self.pi_pwm is not None):
                         self.pi_pwm.off()
                         self.pi_pwm.value = 0
-                    self.scrref = True
+                    self.scrref = self.scrref + 1
                 else:
                     j = self.throttle * 0.1
                     if (self.pi_pwm is not None):
                         self.pi_pwm.on()
                         self.pi_pwm.value = j
-                    self.scrref = True
+                    self.scrref = self.scrref + 1
 
             # Initialization
-            if (self.scrref):
+            if (self.scrref > 0):
 
                 self.stdscr.clear()
                 self.height, self.width = self.stdscr.getmaxyx()
@@ -412,7 +413,7 @@ class Tester(object):
 
                 # Refresh the screen
                 self.stdscr.refresh()
-                self.scrref = False
+                self.scrref = self.scrref - 1
 
             # Wait for next input
             k = self.stdscr.getch()
