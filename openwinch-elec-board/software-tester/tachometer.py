@@ -117,7 +117,7 @@ class Tachometer(object):
         return (self.rpmU + self.rpmW + self.rpmV) / 3
 
     def get_kph(self):
-        return WINCH_DIAM * self.get_rpm * 0.1885
+        return WINCH_DIAM * self.get_rpm() * 0.1885
 
     def get_distance(self):
         return (math.pi * WINCH_DIAM) * self.pulseCountU

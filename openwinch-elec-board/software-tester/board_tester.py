@@ -1,14 +1,27 @@
+
 import time
 import atexit
 import curses
-from gpiozero import Button, LED, PWMOutputDevice
 
-from hardware_config import OUT_REVERSE, OUT_SPD, OUT_THROTTLE, IN_KEY_ENTER, IN_KEY_LEFT, IN_KEY_RIGHT, LCD_ADDR, LCD_WIDTH, LCD_HEIGHT
-from tachometer import Tachometer
+from hardware_config import (
+    OUT_REVERSE,
+    OUT_SPD,
+    OUT_THROTTLE,
+    IN_KEY_ENTER,
+    IN_KEY_LEFT,
+    IN_KEY_RIGHT,
+    LCD_ADDR,
+    LCD_WIDTH,
+    LCD_HEIGHT
+)
 
 KEY_R = 114
 KEY_1 = 49
 KEY_2 = 50
+
+INC = float(1)
+PI_ENABLE = True
+LCD_ENABLE = True
 
 
 class Tester(object):
@@ -19,58 +32,82 @@ class Tester(object):
     height = 0
 
     # Controll
-    revr = LED(OUT_REVERSE)
-    spdr = LED(OUT_SPD)
-    pwm = PWMOutputDevice(OUT_THROTTLE)
-
     speed = 1
     throttle = float(0)
-    throttle_inc = float(1)
     reverse = False
 
     # Sensor
-    tacho = Tachometer()
-    btn_left = Button(IN_KEY_LEFT)
-    btn_right = Button(IN_KEY_RIGHT)
-    btn_enter = Button(IN_KEY_ENTER)
-
     state_left = False
     state_right = False
     state_enter = False
 
     hallog = """ """
 
-    rpm = 0
-    kpm = 0
-    rot = False
+    # Internal component
+    pi_btn_left = None
+    pi_btn_right = None
+    pi_btn_enter = None
+    pi_tacho = None
+    pi_revr = None
+    pi_spdr = None
+    pi_pwm = None
 
     def stop(self):
-        self.pwm.off()
-        self.pwm.value = 0
-        self.rpm = 0
+        if (self.pi_pwm is not None):
+            self.pi_pwm.off()
+            self.pi_pwm.value = 0.0
+        print("Goodbye !")
 
     def __init__(self):
-        self.stop()
+        print("Loading...")
+
+        if (LCD_ENABLE):
+            self.init_lcd()
+
+        if (PI_ENABLE):
+            self.init_pi()
+
         atexit.register(self.stop)
-
-        self.draw_lcd()
-
-        self.btn_left.when_pressed = self.btn_left_press
-        self.btn_left.when_released = self.btn_left_unpress
-        self.btn_right.when_pressed = self.btn_right_press
-        self.btn_right.when_released = self.btn_right_unpress
-        self.btn_enter.when_pressed = self.btn_enter_press
-        self.btn_enter.when_released = self.btn_enter_unpress
 
         curses.wrapper(self.draw_main)
 
-    def draw_lcd(self):
+    def init_pi(self):
+        from gpiozero import Button, LED, PWMOutputDevice
+        from tachometer import Tachometer
+
+        # Input
+        self.pi_btn_left = Button(IN_KEY_LEFT)
+        self.pi_btn_right = Button(IN_KEY_RIGHT)
+        self.pi_btn_enter = Button(IN_KEY_ENTER)
+
+        # Output
+        self.pi_revr = LED(OUT_REVERSE)
+        self.pi_spdr = LED(OUT_SPD)
+        self.pi_pwm = PWMOutputDevice(OUT_THROTTLE)
+
+        self.pi_btn_left.when_pressed = self.btn_left_press
+        self.pi_btn_left.when_released = self.btn_left_unpress
+        self.pi_btn_right.when_pressed = self.btn_right_press
+        self.pi_btn_right.when_released = self.btn_right_unpress
+        self.pi_btn_enter.when_pressed = self.btn_enter_press
+        self.pi_btn_enter.when_released = self.btn_enter_unpress
+
+        # Tachometer
+        self.pi_tacho = Tachometer()
+
+        self.stop()
+
+    def init_lcd(self):
         from luma.core.interface.serial import i2c
         from luma.core.render import canvas
         from luma.oled.device import sh1106
 
         serial_interface = i2c(port=1, address=LCD_ADDR)
-        device = sh1106(serial_interface, width=LCD_WIDTH, height=LCD_HEIGHT, rotate=0)
+        device = sh1106(serial_interface,
+                        width=LCD_WIDTH,
+                        height=LCD_HEIGHT,
+                        rotate=0)
+        device.show()
 
         with canvas(device) as draw:
             font_size = 20
@@ -82,7 +119,6 @@ class Tester(object):
             yver = y + font_size
 
             draw.text((x, y), name)
-        device.show()
 
     def btn_left_press(self):
         self.state_left = True
@@ -107,18 +143,6 @@ class Tester(object):
     def btn_enter_unpress(self):
         self.state_enter = False
         self.scrref = True
-
-    def get_kpm(self):
-        self.kpm = WINCH_DIAM * self.rpm * 0.1885
-
-    def get_rpm(self):
-        self.rpm_end = time.time()
-
-        delta = self.rpm_end - self.rpm_start
-        delta = delta / 60
-        self.rpm = (self.hsw_count / delta) / MOTOR_PPR
-
-        self.rpm_start = time.time()
 
     def format_title(self, win, pos_x, pos_y, title):
         # win.attron(curses.color_pair(1))
@@ -166,9 +190,17 @@ class Tester(object):
 
         # Value
         pos_xv = pos_x + 1
-        self.stdscr.addstr(pos_y + 1, pos_xv, "Left : {}".format(self.state_left))
-        self.stdscr.addstr(pos_y + 2, pos_xv, "Enter : {}".format(self.state_enter))
-        self.stdscr.addstr(pos_y + 3, pos_xv, "Right : {}".format(self.state_right))
+        self.stdscr.addstr(pos_y + 1,
+                           pos_xv,
+                           "Left : {}".format(self.state_left))
+
+        self.stdscr.addstr(pos_y + 2,
+                           pos_xv,
+                           "Enter : {}".format(self.state_enter))
+
+        self.stdscr.addstr(pos_y + 3,
+                           pos_xv,
+                           "Right : {}".format(self.state_right))
 
     def draw_info(self):
         pos_x = 19
@@ -179,9 +211,23 @@ class Tester(object):
 
         # Value
         pos_xv = pos_x + 1
-        self.stdscr.addstr(pos_y + 1, pos_xv, "RPM : {}".format(self.rpm))
-        self.stdscr.addstr(pos_y + 2, pos_xv, "K/M : {}".format(self.kpm))
-        self.stdscr.addstr(pos_y + 3, pos_xv, "Rotation : {}".format(self.rot))
+        if (self.pi_tacho is not None):
+            self.stdscr.addstr(pos_y + 1,
+                               pos_xv,
+                               "RPM : {}".format(self.pi_tacho.get_rpm()))
+
+            self.stdscr.addstr(pos_y + 2,
+                               pos_xv,
+                               "K/M : {}".format(self.pi_tacho.get_kph()))
+
+            self.stdscr.addstr(pos_y + 3,
+                               pos_xv,
+                               "Rotation : {}".format(
+                                   self.pi_tacho.get_rotation()))
+        else:
+            self.stdscr.addstr(pos_y + 1, pos_xv, "RPM : No Tacho !")
+            self.stdscr.addstr(pos_y + 2, pos_xv, "K/M : No Tacho !")
+            self.stdscr.addstr(pos_y + 3, pos_xv, "Rotation : No Tacho !")
 
     def draw_hall(self):
         pos_x = 62
@@ -293,51 +339,56 @@ class Tester(object):
 
         # Loop where k is the last character pressed
         while (k != ord('q')):
+            update_throttle = False
 
-            tt = False
+            # Throttle
             if k == curses.KEY_DOWN:
                 if (self.throttle > 0):
-                    self.throttle = self.throttle - self.throttle_inc
-                    tt = True
+                    self.throttle = self.throttle - INC
+                    update_throttle = True
                     self.scrref = True
             elif k == curses.KEY_UP:
                 if (self.throttle < 10):
-                    self.throttle = self.throttle + self.throttle_inc
-                    tt = True
+                    self.throttle = self.throttle + INC
+                    update_throttle = True
                     self.scrref = True
 
-            # elif k == curses.KEY_RIGHT:
-            #     cursor_x = cursor_x + 1
-            # elif k == curses.KEY_LEFT:
-            #     cursor_x = cursor_x - 1
-
+            # Reverse
             elif k == KEY_R:
                 self.reverse = not self.reverse
                 if (self.reverse):
-                    self.revr.on()
+                    if (self.pi_revr is not None):
+                        self.pi_revr.on()
                     self.scrref = True
                 else:
-                    self.revr.off()
+                    if (self.pi_revr is not None):
+                        self.pi_revr.off()
                     self.scrref = True
 
+            # Speed
             elif k == KEY_1:
                 self.speed = 1
-                self.spdr.off()
+                if (self.pi_spdr is not None):
+                    self.pi_spdr.off()
                 self.scrref = True
             elif k == KEY_2:
                 self.speed = 2
-                self.spdr.on()
+                if (self.pi_spdr is not None):
+                    self.pi_spdr.on()
                 self.scrref = True
 
-            if (tt):
+            # Apply Throttle
+            if (update_throttle):
                 if (self.throttle < 1):
-                    self.pwm.off()
-                    self.pwm.value = 0
+                    if (self.pi_pwm is not None):
+                        self.pi_pwm.off()
+                        self.pi_pwm.value = 0
                     self.scrref = True
                 else:
                     j = self.throttle * 0.1
-                    self.pwm.on()
-                    self.pwm.value = j
+                    if (self.pi_pwm is not None):
+                        self.pi_pwm.on()
+                        self.pi_pwm.value = j
                     self.scrref = True
 
             # Initialization
@@ -360,7 +411,7 @@ class Tester(object):
 
                 # Refresh the screen
                 self.stdscr.refresh()
-            self.scrref = False
+                self.scrref = False
 
             # Wait for next input
             k = self.stdscr.getch()
