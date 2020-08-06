@@ -6,7 +6,7 @@
 
 # Hardware
 MOTOR_MAX = 38
-MOTOR_PPR = 15
+MOTOR_PPR = 45
 
 # Diameter in meter.
 WINCH_DIAM = 0.2
